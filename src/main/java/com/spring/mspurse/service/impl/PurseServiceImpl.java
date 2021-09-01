@@ -3,6 +3,9 @@ package com.spring.mspurse.service.impl;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -18,6 +21,7 @@ import com.spring.mspurse.service.PurseService;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import redis.config.CacheConfig;
 
 @Service
 @Slf4j
@@ -43,23 +47,27 @@ public class PurseServiceImpl implements PurseService{
 	}
 
 	@Override
+	@Cacheable(cacheNames = CacheConfig.USER_CACHE, unless = "#result == null")
 	public Mono<Purse> findById(String id) {
 		return purseRepository.findById(id);
 	}
 
 	@Override
+	@CachePut(cacheNames = CacheConfig.USER_CACHE, key = "#t", unless = "#result == null")
 	public Mono<Purse> update(Purse t) {
 		return purseRepository.save(t)
 				.filter(purse -> purse.getBalance()>=0);
 	}
 	
 	@Override
+	@CachePut(cacheNames = CacheConfig.USER_CACHE, key = "#t", unless = "#result == null")
 	public Mono<Purse> updateDebitCard(Purse t) {
 		return purseRepository.save(t)
 				.filter(purse -> purse.getBalance()>=0);
 	}
 
 	@Override
+	@CacheEvict(cacheNames = CacheConfig.USER_CACHE, key = "#t")
 	public Mono<Boolean> delete(String t) {
 		return purseRepository.findById(t)
                 .flatMap(dc -> purseRepository.delete(dc).then(Mono.just(Boolean.TRUE)))
