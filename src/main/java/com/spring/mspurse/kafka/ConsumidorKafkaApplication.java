@@ -9,8 +9,13 @@ import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.spring.mspurse.entity.BootCoin;
+import com.spring.mspurse.entity.BootCoinRequest;
+import com.spring.mspurse.entity.BootCoinTransfer;
 import com.spring.mspurse.entity.PurseTransaction;
 import com.spring.mspurse.service.PurseService;
+
+import reactor.core.publisher.Mono;
 
 @Configuration
 public class ConsumidorKafkaApplication {
@@ -71,5 +76,56 @@ public class ConsumidorKafkaApplication {
 						}
 				).subscribe();
         	
+    }
+    
+    @KafkaListener(id="myId22", topics = "topico-everis6")
+    public void listen2(String message) throws Exception{
+    	System.out.println(">>>>> BootCoin @KafkaListener <<<<< - " + message);
+    	
+    	BootCoinRequest bcr = objectMapper.readValue(message, BootCoinRequest.class);
+    	System.out.println("NumberPhone = " + bcr.getBootCoin().getPhoneNumber());
+    	purseService.findByPhoneNumber(bcr.getBootCoin().getPhoneNumber())
+    		.flatMap(yanki -> {
+    			if(yanki.getDebitCard() == null) {
+    				System.out.println("Buyer. no tiene debit card ");
+    				yanki.setBalance(yanki.getBalance() - bcr.getAmount()*bcr.getExchangeRate());
+    				System.out.println("Monto actualizado = " + yanki.getBalance());
+    				purseService.update(yanki);
+    			}else{
+    				System.out.println("Buyer DeditCard = " + yanki.getDebitCard().getCardNumber());
+    				yanki.getDebitCard().setAmountPurseTransaction(bcr.getAmount()*bcr.getExchangeRate()*-1);
+    				System.out.println("DeditCard monto = " + yanki.getDebitCard().getAmountPurseTransaction());
+    				template.send("topico-everis2", yanki.getDebitCard());
+    			}
+    			
+    			return Mono.empty();
+    		})
+    		.subscribe();
+    }
+    
+    @KafkaListener(id="myId31", topics = "topico-everis8")
+    public void listen3(String message) throws Exception{
+    	System.err.println(">>>>> PhoneNumber @KafkaListener <<<<< - " + message);
+    	BootCoinTransfer bct = objectMapper.readValue(message, BootCoinTransfer.class);
+    	System.out.println("PhoneNumber = " + bct.getSeller().getPhoneNumber());
+    	
+    	purseService.findByPhoneNumber(bct.getSeller().getPhoneNumber())
+    	.flatMap(yanki -> {
+			if(yanki.getDebitCard() == null) {
+				System.out.println("Seller. no tiene debit card ");
+				yanki.setBalance(yanki.getBalance() + bct.getBuyer().getAmount()*bct.getBuyer().getExchangeRate());
+				System.out.println("Monto actualizado = " + yanki.getBalance());
+				purseService.update(yanki);
+			}else{
+				System.out.println("Seller DeditCard = " + yanki.getDebitCard().getCardNumber());
+				yanki.getDebitCard().setAmountPurseTransaction(bct.getBuyer().getAmount()*bct.getBuyer().getExchangeRate());
+				System.out.println("DeditCard monto = " + yanki.getDebitCard().getAmountPurseTransaction());
+				template.send("topico-everis2", yanki.getDebitCard());
+			}
+			
+			return Mono.empty();
+		})
+		.subscribe();
+			
     }
 }
